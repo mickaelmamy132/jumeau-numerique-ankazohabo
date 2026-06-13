@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jumeau Numérique — District Ankazoabo</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg:       #0d1117;
+    --bg2:      #161b22;
+    --bg3:      #21262d;
+    --border:   #30363d;
+    --text:     #e6edf3;
+    --text2:    #8b949e;
+    --accent:   #238636;
+    --accent2:  #1f6feb;
+    --warn:     #d29922;
+    --danger:   #da3633;
+    --teal:     #2ea043;
+    --purple:   #8957e5;
+    --radius:   8px;
+    --sidebar:  260px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; font-size: 14px; }
+
+  /* ── Header ── */
+  header { display: flex; align-items: center; gap: 12px; padding: 0 16px; height: 52px; background: var(--bg2); border-bottom: 1px solid var(--border); flex-shrink: 0; z-index: 100; }
+  .logo { display: flex; align-items: center; gap: 8px; }
+  .logo-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 8px var(--teal); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+  .logo-text { font-size: 15px; font-weight: 600; letter-spacing: -0.3px; }
+  .logo-sub  { font-size: 11px; color: var(--text2); }
+  .header-nav { display: flex; gap: 2px; margin-left: auto; }
+  .nav-btn { padding: 6px 14px; border-radius: var(--radius); border: none; background: transparent; color: var(--text2); cursor: pointer; font-size: 13px; transition: all .15s; }
+  .nav-btn:hover, .nav-btn.active { background: var(--bg3); color: var(--text); }
+  .nav-btn.active { color: var(--accent2); }
+  .header-status { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; background: rgba(46,160,67,.12); border: 1px solid rgba(46,160,67,.3); font-size: 11px; color: var(--teal); margin-left: 8px; }
+
+  /* ── Layout ── */
+  .app-body { display: flex; flex: 1; overflow: hidden; }
+  .sidebar { width: var(--sidebar); background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0; }
+  .main { flex: 1; overflow: hidden; position: relative; }
+
+  /* ── Sidebar ── */
+  .sidebar-section { padding: 12px; border-bottom: 1px solid var(--border); }
+  .sidebar-title { font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 8px; }
+  .kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .kpi { background: var(--bg3); border-radius: var(--radius); padding: 8px; }
+  .kpi-val { font-size: 20px; font-weight: 700; line-height: 1; }
+  .kpi-label { font-size: 10px; color: var(--text2); margin-top: 3px; }
+  .kpi-val.green { color: var(--teal); }
+  .kpi-val.blue  { color: var(--accent2); }
+  .kpi-val.warn  { color: var(--warn); }
+  .kpi-val.purple{ color: var(--purple); }
+
+  .sensor-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .sensor-item:last-child { border-bottom: none; }
+  .sensor-name { font-size: 12px; color: var(--text2); }
+  .sensor-val  { font-size: 13px; font-weight: 600; }
+  .sensor-dot  { width: 6px; height: 6px; border-radius: 50%; background: var(--teal); margin-right: 6px; display: inline-block; }
+
+  .alert-item { display: flex; gap: 8px; padding: 7px; border-radius: 6px; margin-bottom: 5px; font-size: 12px; }
+  .alert-item.attention { background: rgba(210,153,34,.1); border-left: 3px solid var(--warn); }
+  .alert-item.info      { background: rgba(31,111,235,.1); border-left: 3px solid var(--accent2); }
+  .alert-item.alerte    { background: rgba(218,54,51,.1);  border-left: 3px solid var(--danger); }
+  .alert-title { font-weight: 600; margin-bottom: 2px; }
+  .alert-desc  { color: var(--text2); font-size: 11px; }
+
+  .filter-group { display: flex; flex-wrap: wrap; gap: 4px; }
+  .filter-btn { padding: 4px 8px; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--text2); cursor: pointer; font-size: 11px; transition: all .15s; }
+  .filter-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+  .filter-btn.active { background: var(--accent2); border-color: var(--accent2); color: #fff; }
+
+  /* ── Map ── */
+  #map { width: 100%; height: 100%; background: #0d1117; }
+  .leaflet-tile { filter: brightness(.7) saturate(.8); }
+  .leaflet-container { background: #0d1117; }
+
+  /* ── Map popup ── */
+  .leaflet-popup-content-wrapper { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); box-shadow: 0 8px 32px rgba(0,0,0,.4); }
+  .leaflet-popup-tip { background: var(--bg2); }
+  .leaflet-popup-content { margin: 12px 16px; min-width: 200px; }
+  .popup-type { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--text2); margin-bottom: 4px; }
+  .popup-name { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+  .popup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px; }
+  .popup-field { background: var(--bg3); border-radius: 5px; padding: 5px 7px; }
+  .popup-field-label { font-size: 10px; color: var(--text2); }
+  .popup-field-val   { font-size: 13px; font-weight: 600; }
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 20px; font-size: 10px; font-weight: 600; }
+  .badge-bon     { background: rgba(46,160,67,.2);  color: var(--teal); }
+  .badge-moyen   { background: rgba(210,153,34,.2); color: var(--warn); }
+  .badge-degrade { background: rgba(218,54,51,.2);  color: var(--danger); }
+  .badge-tres_bon{ background: rgba(46,160,67,.3);  color: #3fb950; }
+
+  /* ── Views ── */
+  .view { display: none; width: 100%; height: 100%; overflow-y: auto; }
+  .view.active { display: block; }
+  #view-map.active { display: flex; }
+
+  /* ── Charts view ── */
+  .charts-view { padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .chart-card  { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+  .chart-title { font-size: 13px; font-weight: 600; margin-bottom: 12px; color: var(--text2); text-transform: uppercase; letter-spacing: .4px; }
+  .chart-wrap  { position: relative; height: 200px; }
+
+  /* ── Table view ── */
+  .table-view { padding: 16px; }
+  .table-header { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
+  .search-box { flex: 1; padding: 7px 12px; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-size: 13px; }
+  .search-box:focus { outline: none; border-color: var(--accent2); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead { position: sticky; top: 0; }
+  th { padding: 8px 12px; background: var(--bg3); color: var(--text2); text-align: left; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; border-bottom: 1px solid var(--border); }
+  td { padding: 8px 12px; border-bottom: 1px solid rgba(48,54,61,.5); }
+  tr:hover td { background: var(--bg3); }
+
+  /* ── 3D Model placeholder ── */
+  #view-3d { background: var(--bg); }
+  .viz-3d-canvas { width: 100%; height: 100%; }
+
+  /* ── Tooltip ── */
+  .map-legend { position: absolute; bottom: 24px; right: 12px; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; z-index: 1000; font-size: 11px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .legend-dot  { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .sidebar { display: none; }
+    .charts-view { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════ HEADER ═══════════════════════════ -->
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    <div>
+      <div class="logo-text">Jumeau Numérique Ankazoabo</div>
+      <div class="logo-sub">Matsiatra Ambony · Madagascar</div>
+    </div>
+  </div>
+  <nav class="header-nav">
+    <button class="nav-btn active" onclick="switchView('map')" id="btn-map">🗺️ Carte</button>
+    <button class="nav-btn" onclick="switchView('3d')"   id="btn-3d">🏙️ Vue 3D</button>
+    <button class="nav-btn" onclick="switchView('charts')" id="btn-charts">📊 Analytique</button>
+    <button class="nav-btn" onclick="switchView('table')"  id="btn-table">📋 Bâtiments</button>
+  </nav>
+  <div class="header-status">● Données actives</div>
+</header>
+
+<!-- ═══════════════════════════ BODY ════════════════════════════ -->
+<div class="app-body">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+
+    <!-- KPIs -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">District Ankazoabo</div>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-val green" id="kpi-bat">57</div><div class="kpi-label">Bâtiments</div></div>
+        <div class="kpi"><div class="kpi-val blue"  id="kpi-pop">18 500</div><div class="kpi-label">Habitants</div></div>
+        <div class="kpi"><div class="kpi-val warn"  id="kpi-elec">68%</div><div class="kpi-label">Électrifié</div></div>
+        <div class="kpi"><div class="kpi-val purple"id="kpi-eau">31%</div><div class="kpi-label">Eau courante</div></div>
+      </div>
+    </div>
+
+    <!-- Filtres -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">Filtrer par usage</div>
+      <div class="filter-group" id="filters">
+        <button class="filter-btn active" data-filter="all" onclick="applyFilter(this)">Tous</button>
+        <button class="filter-btn" data-filter="residentiel"   onclick="applyFilter(this)">Résidentiel</button>
+        <button class="filter-btn" data-filter="education"     onclick="applyFilter(this)">Éducation</button>
+        <button class="filter-btn" data-filter="sante"         onclick="applyFilter(this)">Santé</button>
+        <button class="filter-btn" data-filter="administratif" onclick="applyFilter(this)">Administratif</button>
+        <button class="filter-btn" data-filter="commercial"    onclick="applyFilter(this)">Commerce</button>
+        <button class="filter-btn" data-filter="culte"         onclick="applyFilter(this)">Culte</button>
+        <button class="filter-btn" data-filter="infrastructure"onclick="applyFilter(this)">Infrastructure</button>
+      </div>
+    </div>
+
+    <!-- Capteurs IoT -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">Capteurs IoT en direct</div>
+      <div id="sensors-list">
+        <div class="sensor-item"><span class="sensor-name"><span class="sensor-dot"></span>Qualité air</span><span class="sensor-val" style="color:var(--teal)">42 AQI</span></div>
+        <div class="sensor-item"><span class="sensor-name"><span class="sensor-dot"></span>Température</span><span class="sensor-val">22.5 °C</span></div>
+        <div class="sensor-item"><span class="sensor-name"><span class="sensor-dot"></span>Humidité</span><span class="sensor-val" style="color:var(--accent2)">68 %</span></div>
+        <div class="sensor-item"><span class="sensor-name"><span class="sensor-dot"></span>Débit eau</span><span class="sensor-val" style="color:var(--warn)">145 m³/h</span></div>
+        <div class="sensor-item"><span class="sensor-name"><span class="sensor-dot"></span>Consomm. élec.</span><span class="sensor-val">380 kWh</span></div>
+        <div class="sensor-item"><span class="sensor-name"><span class="sensor-dot"></span>Trafic routier</span><span class="sensor-val">24 véh/h</span></div>
+        <div class="sensor-item"><span class="sensor-name"><span class="sensor-dot"></span>Pluviométrie</span><span class="sensor-val" style="color:var(--accent2)">0 mm/h</span></div>
+      </div>
+    </div>
+
+    <!-- Alertes -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">Alertes actives</div>
+      <div class="alert-item attention">
+        <div><div class="alert-title">⚠ Fuite réseau eau</div><div class="alert-desc">Rue principale · perte 12 m³/h</div></div>
+      </div>
+      <div class="alert-item info">
+        <div><div class="alert-title">ℹ Surveillance Q. Sud</div><div class="alert-desc">Fortes pluies prévues</div></div>
+      </div>
+    </div>
+
+    <!-- Projets -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">Projets en cours</div>
+      <div style="font-size:12px; color:var(--text2); line-height:1.8;">
+        <div>🟡 Réhabilitation route principale</div>
+        <div>🔵 Extension réseau eau Q. Nord</div>
+        <div>🔵 Électrification Zone Agricole</div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ══════════ VIEWS ══════════ -->
+  <main class="main">
+
+    <!-- MAP -->
+    <div id="view-map" class="view active">
+      <div id="map"></div>
+      <div class="map-legend">
+        <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px;">Usage</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#1f6feb"></div>Administratif</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#da3633"></div>Santé</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#f78166"></div>Éducation</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#2ea043"></div>Commerce</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#8957e5"></div>Culte</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#d29922"></div>Infrastructure</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#8b949e"></div>Résidentiel</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ff9f1c"></div>Route / voirie</div>
+      </div>
+    </div>
+
+    <!-- 3D VIEW -->
+    <div id="view-3d" class="view">
+      <canvas id="canvas3d" class="viz-3d-canvas"></canvas>
+    </div>
+
+    <!-- CHARTS -->
+    <div id="view-charts" class="view">
+      <div class="charts-view">
+        <div class="chart-card">
+          <div class="chart-title">Bâtiments par usage</div>
+          <div class="chart-wrap"><canvas id="chart-usage"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">État du bâti</div>
+          <div class="chart-wrap"><canvas id="chart-etat"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Accès eau & électricité par quartier</div>
+          <div class="chart-wrap"><canvas id="chart-infra"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Évolution population (2015–2024)</div>
+          <div class="chart-wrap"><canvas id="chart-pop"></canvas></div>
+        </div>
+        <div class="chart-card" style="grid-column:1/-1">
+          <div class="chart-title">Température — 7 derniers jours (capteur météo)</div>
+          <div class="chart-wrap" style="height:160px"><canvas id="chart-temp"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TABLE -->
+    <div id="view-table" class="view">
+      <div class="table-view">
+        <div class="table-header">
+          <input class="search-box" id="search-box" type="text" placeholder="🔍 Rechercher un bâtiment…" oninput="filterTable(this.value)">
+          <span id="table-count" style="color:var(--text2);font-size:12px;white-space:nowrap"></span>
+        </div>
+        <table id="bat-table">
+          <thead>
+            <tr>
+              <th>Nom / ID</th>
+              <th>Usage</th>
+              <th>Quartier</th>
+              <th>Niveaux</th>
+              <th>Matériaux</th>
+              <th>État</th>
+              <th>Électricité</th>
+              <th>Eau</th>
+              <th>Année</th>
+            </tr>
+          </thead>
+          <tbody id="table-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ═══════════════════ DATA ═══════════════════
+const DISTRICT = {
+  nom: 'Ankazoabo', commune: 'Ankazoabo', region: 'Matsiatra Ambony',
+  pays: 'Madagascar', superficie_ha: 4820, population: 18500,
+  lat: -20.4833, lon: 46.7167, altitude_m: 890
+};
+
+const QUARTIERS = [
+  { id:'q-centre',   nom:'Centre-ville',   pop:4200 },
+  { id:'q-nord',     nom:'Quartier Nord',  pop:3800 },
+  { id:'q-sud',      nom:'Quartier Sud',   pop:3200 },
+  { id:'q-est',      nom:'Quartier Est',   pop:2900 },
+  { id:'q-marche',   nom:'Zone du Marché', pop:2600 },
+  { id:'q-agricole', nom:'Zone Agricole',  pop:1800 },
+];
+
+const BATIMENTS = [
+  { id:'b01', qid:'q-centre', nom:"Mairie d'Ankazoabo",         usage:'administratif', lat:-20.4820, lon:46.7155, niv:2, haut:7.5, surf:380, mur:'brique', toit:'tôle', etat:'bon',    elec:1, eau:1, annee:1975 },
+  { id:'b02', qid:'q-centre', nom:'Bureau Fokontany Centre',     usage:'administratif', lat:-20.4835, lon:46.7162, niv:1, haut:3.5, surf:80,  mur:'brique', toit:'tôle', etat:'moyen',  elec:1, eau:0, annee:1988 },
+  { id:'b03', qid:'q-nord',   nom:'Bureau Fokontany Nord',       usage:'administratif', lat:-20.4750, lon:46.7180, niv:1, haut:3.2, surf:65,  mur:'brique', toit:'tôle', etat:'moyen',  elec:1, eau:0, annee:1992 },
+  { id:'b04', qid:'q-centre', nom:'Centre de Santé de Base II',  usage:'sante',         lat:-20.4828, lon:46.7170, niv:1, haut:4.0, surf:220, mur:'brique', toit:'tôle', etat:'bon',    elec:1, eau:1, annee:1985 },
+  { id:'b05', qid:'q-nord',   nom:'Case de Santé Q. Nord',       usage:'sante',         lat:-20.4760, lon:46.7145, niv:1, haut:3.0, surf:45,  mur:'brique', toit:'tôle', etat:'degrade',elec:0, eau:0, annee:1998 },
+  { id:'b06', qid:'q-centre', nom:'EPP Ankazoabo I',            usage:'education',     lat:-20.4842, lon:46.7148, niv:1, haut:3.5, surf:480, mur:'brique', toit:'tôle', etat:'moyen',  elec:1, eau:1, annee:1966 },
+  { id:'b07', qid:'q-nord',   nom:'EPP Ankazoabo II',           usage:'education',     lat:-20.4755, lon:46.7200, niv:1, haut:3.5, surf:360, mur:'brique', toit:'tôle', etat:'moyen',  elec:0, eau:0, annee:1978 },
+  { id:'b08', qid:'q-centre', nom:"Collège d'Enseignement Gén.", usage:'education',     lat:-20.4815, lon:46.7175, niv:1, haut:4.0, surf:620, mur:'brique', toit:'tôle', etat:'bon',    elec:1, eau:1, annee:1990 },
+  { id:'b09', qid:'q-est',    nom:'École Primaire Est',          usage:'education',     lat:-20.4840, lon:46.7220, niv:1, haut:3.2, surf:180, mur:'pisé',   toit:'tôle', etat:'degrade',elec:0, eau:0, annee:1982 },
+  { id:'b10', qid:'q-marche', nom:"Marché Principal d'Ankazoabo", usage:'commercial', lat:-20.4850, lon:46.7160, niv:1, haut:4.5, surf:1200,mur:'brique', toit:'tôle', etat:'bon',    elec:1, eau:1, annee:1980 },
+  { id:'b11', qid:'q-marche', nom:'Épicerie Centrale',           usage:'commercial',    lat:-20.4845, lon:46.7155, niv:1, haut:3.2, surf:35,  mur:'brique', toit:'tôle', etat:'bon',    elec:1, eau:0, annee:2005 },
+  { id:'b12', qid:'q-marche', nom:'Quincaillerie Rasoa',         usage:'commercial',    lat:-20.4848, lon:46.7165, niv:1, haut:3.0, surf:28,  mur:'brique', toit:'tôle', etat:'bon',    elec:1, eau:0, annee:2010 },
+  { id:'b13', qid:'q-centre', nom:'Église FJKM Ankazoabo',      usage:'culte',         lat:-20.4830, lon:46.7142, niv:1, haut:8.0, surf:280, mur:'brique', toit:'tôle', etat:'bon',    elec:1, eau:0, annee:1952 },
+  { id:'b14', qid:'q-nord',   nom:'Église Catholique St-Pierre', usage:'culte',         lat:-20.4745, lon:46.7170, niv:1, haut:9.5, surf:220, mur:'brique', toit:'tôle', etat:'bon',    elec:1, eau:0, annee:1938 },
+  { id:'b15', qid:'q-centre', nom:"Château d'eau principal",     usage:'infrastructure',lat:-20.4800, lon:46.7130, niv:1, haut:15,  surf:40,  mur:'béton',  toit:'béton',etat:'bon',    elec:1, eau:1, annee:2002 },
+  { id:'b16', qid:'q-centre', nom:'Poste électrique',            usage:'infrastructure',lat:-20.4810, lon:46.7140, niv:1, haut:3.0, surf:25,  mur:'béton',  toit:'tôle', etat:'bon',    elec:1, eau:0, annee:1999 },
+  { id:'b17', qid:'q-centre', nom:'Bureau de Poste',             usage:'administratif', lat:-20.4822, lon:46.7158, niv:1, haut:3.5, surf:55,  mur:'brique', toit:'tôle', etat:'moyen',  elec:1, eau:0, annee:1970 },
+  ...Array.from({length:40}, (_,i) => ({
+    id:`br${i}`, qid: QUARTIERS[i%QUARTIERS.length].id,
+    nom: `Habitation ${['Rakoton','Randrian','Razafi','Rabemanan','Ratsim'][i%5]}${i+1}`,
+    usage:'residentiel',
+    lat: -20.4820 + Math.sin(i*0.7)*0.015,
+    lon: 46.7167 + Math.cos(i*0.5)*0.018,
+    niv: i%5===0?2:1, haut: i%5===0?6.0:3.2,
+    surf: 40+(i%8)*15,
+    mur: i%3===0?'pisé':'brique', toit:'tôle',
+    etat: ['bon','bon','moyen','moyen','degrade'][i%5],
+    elec: i%3!==0?1:0, eau: i%5===0?1:0,
+    annee: 1970+(i*1.3|0)
+  }))
+];
+
+const CAPTEURS = [
+  { id:'cap-01', type:'qualite_air',   nom:'Capteur air Centre-ville',  lat:-20.4825, lon:46.7155, val:42,   unite:'AQI',   color:'#2ea043' },
+  { id:'cap-02', type:'temperature',   nom:'Station météo principale',  lat:-20.4820, lon:46.7167, val:22.5, unite:'°C',    color:'#f78166' },
+  { id:'cap-03', type:'pluie',         nom:'Pluviomètre district',      lat:-20.4800, lon:46.7150, val:0,    unite:'mm/h',  color:'#1f6feb' },
+  { id:'cap-04', type:'compteur_eau',  nom:'Compteur château d\'eau',   lat:-20.4800, lon:46.7130, val:145,  unite:'m³/h',  color:'#d29922' },
+  { id:'cap-05', type:'compteur_elec', nom:'Compteur électrique',       lat:-20.4810, lon:46.7140, val:380,  unite:'kWh',   color:'#8957e5' },
+  { id:'cap-06', type:'humidite',      nom:'Humidité zone agricole',    lat:-20.4950, lon:46.7200, val:68,   unite:'%',     color:'#1f6feb' },
+  { id:'cap-07', type:'trafic',        nom:'Trafic route nationale',    lat:-20.4855, lon:46.7100, val:24,   unite:'véh/h', color:'#8b949e' },
+];
+
+const ROUTES = [
+  {
+    id: 'r01',
+    nom: 'Route Nationale 7',
+    type: 'route',
+    statut: 'en cours',
+    surface: 'asphalte',
+    longueur_km: 2.3,
+    trafic_moyen: 24,
+    capteur: 'cap-07',
+    latlngs: [
+      [-20.4860, 46.7090],
+      [-20.4855, 46.7100],
+      [-20.4848, 46.7120],
+      [-20.4840, 46.7140],
+      [-20.4830, 46.7155]
+    ]
+  },
+  {
+    id: 'r02',
+    nom: 'Avenue du Marché',
+    type: 'route',
+    statut: 'réfection planifiée',
+    surface: 'gravier stabilisé',
+    longueur_km: 1.2,
+    trafic_moyen: 12,
+    capteur: null,
+    latlngs: [
+      [-20.4845, 46.7162],
+      [-20.4848, 46.7165],
+      [-20.4850, 46.7168],
+      [-20.4853, 46.7171]
+    ]
+  }
+];
+
+// ═══════════════════ COLOUR MAP ═══════════════════
+const COLORS = {
+  administratif:'#1f6feb', sante:'#da3633', education:'#f78166',
+  commercial:'#2ea043', culte:'#8957e5', infrastructure:'#d29922',
+  residentiel:'#8b949e', agricole:'#56d364', autre:'#6e7681'
+};
+
+// ═══════════════════ MAP INIT ═══════════════════
+let map, layerGroup;
+let activeFilter = 'all';
+
+function initMap() {
+  map = L.map('map', { center: [DISTRICT.lat, DISTRICT.lon], zoom: 15, zoomControl: true });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap',
+    maxZoom: 19
+  }).addTo(map);
+
+  layerGroup = L.layerGroup().addTo(map);
+  renderMarkers('all');
+  renderRoutes();
+
+  // Add sensor markers
+  CAPTEURS.forEach(c => {
+    const icon = L.divIcon({
+      html: `<div style="width:12px;height:12px;border-radius:50%;background:${c.color};border:2px solid rgba(255,255,255,.4);box-shadow:0 0 6px ${c.color}"></div>`,
+      iconSize:[12,12], iconAnchor:[6,6], className:''
+    });
+    L.marker([c.lat, c.lon], { icon })
+      .addTo(map)
+      .bindPopup(`<div class="popup-type">Capteur IoT — ${c.type.replace(/_/g,' ')}</div><div class="popup-name">${c.nom}</div><div style="font-size:20px;font-weight:700;color:${c.color}">${c.val} <span style="font-size:13px">${c.unite}</span></div>`);
+  });
+}
+
+function renderRoutes() {
+  ROUTES.forEach(route => {
+    const routeColor = '#ff9f1c';
+    const polyline = L.polyline(route.latlngs, {
+      color: routeColor,
+      weight: 5,
+      opacity: 0.75,
+      dashArray: '8,6'
+    }).addTo(map);
+
+    const capteur = CAPTEURS.find(c => c.id === route.capteur);
+    const traficHtml = capteur ? `<div class="popup-field"><div class="popup-field-label">Trafic</div><div class="popup-field-val">${capteur.val} ${capteur.unite}</div></div>` : '';
+
+    polyline.bindPopup(`
+      <div class="popup-type">Route</div>
+      <div class="popup-name">${route.nom}</div>
+      <div class="popup-grid">
+        <div class="popup-field"><div class="popup-field-label">Statut</div><div class="popup-field-val">${route.statut}</div></div>
+        <div class="popup-field"><div class="popup-field-label">Longueur</div><div class="popup-field-val">${route.longueur_km} km</div></div>
+        <div class="popup-field"><div class="popup-field-label">Surface</div><div class="popup-field-val">${route.surface}</div></div>
+        ${traficHtml}
+      </div>
+      <div style="display:flex;gap:6px">
+        <span class="badge badge-tres_bon">${route.type}</span>
+        <span class="badge" style="background:rgba(255,159,28,.18);color:#ff9f1c">${route.statut}</span>
+      </div>
+    `);
+  });
+}
+
+function makeIcon(color, height) {
+  const h = Math.min(28, Math.max(12, 12 + height * 0.5));
+  return L.divIcon({
+    html: `<div style="width:${h}px;height:${h}px;border-radius:3px;background:${color};border:2px solid rgba(255,255,255,.25);opacity:.92;cursor:pointer"></div>`,
+    iconSize:[h,h], iconAnchor:[h/2,h/2], className:''
+  });
+}
+
+function renderMarkers(filter) {
+  layerGroup.clearLayers();
+  BATIMENTS.forEach(b => {
+    if (filter !== 'all' && b.usage !== filter) return;
+    const color = COLORS[b.usage] || '#8b949e';
+    const q = QUARTIERS.find(q => q.id === b.qid);
+    L.marker([b.lat, b.lon], { icon: makeIcon(color, b.haut) })
+      .addTo(layerGroup)
+      .bindPopup(`
+        <div class="popup-type">${b.usage.toUpperCase()}</div>
+        <div class="popup-name">${b.nom}</div>
+        <div class="popup-grid">
+          <div class="popup-field"><div class="popup-field-label">Quartier</div><div class="popup-field-val">${q ? q.nom : '—'}</div></div>
+          <div class="popup-field"><div class="popup-field-label">Niveaux</div><div class="popup-field-val">${b.niv} étage${b.niv>1?'s':''}</div></div>
+          <div class="popup-field"><div class="popup-field-label">Superficie</div><div class="popup-field-val">${b.surf} m²</div></div>
+          <div class="popup-field"><div class="popup-field-label">Année</div><div class="popup-field-val">${b.annee||'N/A'}</div></div>
+          <div class="popup-field"><div class="popup-field-label">Matériau</div><div class="popup-field-val">${b.mur}</div></div>
+          <div class="popup-field"><div class="popup-field-label">Hauteur</div><div class="popup-field-val">${b.haut} m</div></div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <span class="badge badge-${b.etat}">${b.etat}</span>
+          ${b.elec?'<span class="badge" style="background:rgba(210,153,34,.2);color:#d29922">⚡ Électricité</span>':''}
+          ${b.eau?'<span class="badge" style="background:rgba(31,111,235,.2);color:#1f6feb">💧 Eau courante</span>':''}
+        </div>
+      `);
+  });
+}
+
+function applyFilter(btn) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeFilter = btn.dataset.filter;
+  renderMarkers(activeFilter);
+}
+
+// ═══════════════════ 3D VIEW ═══════════════════
+function init3D() {
+  const canvas = document.getElementById('canvas3d');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth;
+  canvas.height = canvas.offsetHeight;
+  const W = canvas.width, H = canvas.height;
+
+  // Simple isometric 3D city view
+  const ISO_X = 0.866, ISO_Y = 0.5;
+  const SCALE = 6;
+  const OX = W * 0.5, OY = H * 0.35;
+
+  function toIso(x, y, z) {
+    return {
+      sx: OX + (x - y) * ISO_X * SCALE,
+      sy: OY + (x + y) * ISO_Y * SCALE - z * SCALE * 0.9
+    };
+  }
+
+  function drawBuilding(x, y, w, d, h, color) {
+    const tl = toIso(x,   y,   h), tr = toIso(x+w, y,   h);
+    const bl = toIso(x,   y+d, h), br = toIso(x+w, y+d, h);
+    const fl = toIso(x,   y+d, 0), fr = toIso(x+w, y+d, 0);
+    const gl = toIso(x+w, y,   0);
+
+    // Right face
+    ctx.beginPath();
+    ctx.moveTo(tr.sx, tr.sy); ctx.lineTo(gl.sx, gl.sy);
+    ctx.lineTo(fr.sx, fr.sy); ctx.lineTo(br.sx, br.sy);
+    ctx.closePath();
+    ctx.fillStyle = shadeColor(color, -35); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = .5; ctx.stroke();
+
+    // Front face
+    ctx.beginPath();
+    ctx.moveTo(bl.sx, bl.sy); ctx.lineTo(br.sx, br.sy);
+    ctx.lineTo(fr.sx, fr.sy); ctx.lineTo(fl.sx, fl.sy);
+    ctx.closePath();
+    ctx.fillStyle = shadeColor(color, -20); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = .5; ctx.stroke();
+
+    // Top face (roof)
+    ctx.beginPath();
+    ctx.moveTo(tl.sx, tl.sy); ctx.lineTo(tr.sx, tr.sy);
+    ctx.lineTo(br.sx, br.sy); ctx.lineTo(bl.sx, bl.sy);
+    ctx.closePath();
+    ctx.fillStyle = color; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.1)'; ctx.lineWidth = .5; ctx.stroke();
+  }
+
+  function shadeColor(col, pct) {
+    const n = parseInt(col.slice(1), 16);
+    const r = Math.min(255, Math.max(0, (n>>16)+pct));
+    const g = Math.min(255, Math.max(0, ((n>>8)&0xff)+pct));
+    const b = Math.min(255, Math.max(0, (n&0xff)+pct));
+    return `rgb(${r},${g},${b})`;
+  }
+
+  ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, W, H);
+
+  // Grid
+  ctx.strokeStyle = 'rgba(48,54,61,.4)'; ctx.lineWidth = .5;
+  for (let i = -20; i <= 40; i += 5) {
+    const a = toIso(i, -20, 0), b = toIso(i, 40, 0);
+    ctx.beginPath(); ctx.moveTo(a.sx,a.sy); ctx.lineTo(b.sx,b.sy); ctx.stroke();
+    const c = toIso(-20, i, 0), d = toIso(40, i, 0);
+    ctx.beginPath(); ctx.moveTo(c.sx,c.sy); ctx.lineTo(d.sx,d.sy); ctx.stroke();
+  }
+
+  // Normalize batiments to grid coords
+  const latMin = -20.497, latMax = -20.470;
+  const lonMin =  46.710, lonMax =  46.725;
+  const SHOWN = BATIMENTS.filter(b => activeFilter === 'all' || b.usage === activeFilter);
+
+  // Sort by isometric depth (back to front)
+  const sorted = [...SHOWN].sort((a,b) => (a.lat + a.lon) - (b.lat + b.lon));
+
+  sorted.forEach(b => {
+    const gx = ((b.lon - lonMin) / (lonMax - lonMin)) * 40 - 5;
+    const gy = ((b.lat - latMin) / (latMax - latMin)) * 40 - 5;
+    const h  = b.haut / 1.2;
+    const w  = Math.max(1.2, Math.sqrt(b.surf) / 5);
+    const color = COLORS[b.usage] || '#8b949e';
+    drawBuilding(gx, gy, w, w, h, color);
+  });
+
+  // Labels
+  ctx.font = '600 13px -apple-system, sans-serif';
+  ctx.fillStyle = '#8b949e';
+  ctx.fillText(`Vue 3D isométrique — ${SHOWN.length} bâtiments`, 16, 28);
+  ctx.font = '11px -apple-system, sans-serif';
+  ctx.fillStyle = '#6e7681';
+  ctx.fillText('Filtre actif : ' + activeFilter, 16, 44);
+
+  // Legend on canvas
+  let lx = 16, ly = H - 120;
+  Object.entries(COLORS).slice(0,7).forEach(([k,v]) => {
+    ctx.fillStyle = v;
+    ctx.fillRect(lx, ly, 10, 10);
+    ctx.fillStyle = '#8b949e';
+    ctx.font = '11px sans-serif';
+    ctx.fillText(k, lx+14, ly+9);
+    ly += 16;
+  });
+}
+
+// ═══════════════════ CHARTS ═══════════════════
+let chartsInit = false;
+function initCharts() {
+  if (chartsInit) return;
+  chartsInit = true;
+  const defaults = {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#8b949e', font: { size: 11 } } } }
+  };
+
+  // Usage
+  const usageCounts = {};
+  BATIMENTS.forEach(b => usageCounts[b.usage] = (usageCounts[b.usage]||0)+1);
+  new Chart(document.getElementById('chart-usage'), {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(usageCounts),
+      datasets: [{ data: Object.values(usageCounts), backgroundColor: Object.keys(usageCounts).map(k=>COLORS[k]||'#6e7681'), borderWidth: 0 }]
+    },
+    options: { ...defaults }
+  });
+
+  // État
+  const etatCounts = {};
+  BATIMENTS.forEach(b => etatCounts[b.etat] = (etatCounts[b.etat]||0)+1);
+  new Chart(document.getElementById('chart-etat'), {
+    type: 'bar',
+    data: {
+      labels: Object.keys(etatCounts),
+      datasets: [{ label: 'Nb bâtiments', data: Object.values(etatCounts),
+        backgroundColor: ['#2ea043','#56d364','#d29922','#da3633','#6e7681'], borderWidth:0, borderRadius:4 }]
+    },
+    options: { ...defaults, scales: { x:{ ticks:{color:'#8b949e'} }, y:{ ticks:{color:'#8b949e'}, grid:{color:'rgba(48,54,61,.5)'} } } }
+  });
+
+  // Infra par quartier
+  const qLabels = QUARTIERS.map(q => q.nom.replace('Quartier ','Q.'));
+  const elecData = QUARTIERS.map(q => BATIMENTS.filter(b=>b.qid===q.id&&b.elec).length);
+  const eauData  = QUARTIERS.map(q => BATIMENTS.filter(b=>b.qid===q.id&&b.eau).length);
+  new Chart(document.getElementById('chart-infra'), {
+    type: 'bar',
+    data: {
+      labels: qLabels,
+      datasets: [
+        { label: 'Électricité', data: elecData, backgroundColor: '#d29922', borderWidth:0, borderRadius:3 },
+        { label: 'Eau courante', data: eauData, backgroundColor: '#1f6feb', borderWidth:0, borderRadius:3 }
+      ]
+    },
+    options: { ...defaults, scales: { x:{ticks:{color:'#8b949e',font:{size:10}}}, y:{ticks:{color:'#8b949e'},grid:{color:'rgba(48,54,61,.5)'}} } }
+  });
+
+  // Population historique
+  new Chart(document.getElementById('chart-pop'), {
+    type: 'line',
+    data: {
+      labels: ['2015','2018','2020','2022','2024'],
+      datasets: [{ label: 'Population district', data: [14800,16200,17100,17900,18500],
+        borderColor:'#2ea043', backgroundColor:'rgba(46,160,67,.1)', fill:true,
+        tension:.4, pointBackgroundColor:'#2ea043', pointRadius:4 }]
+    },
+    options: { ...defaults, scales: { x:{ticks:{color:'#8b949e'}}, y:{ticks:{color:'#8b949e'},grid:{color:'rgba(48,54,61,.5)'}} } }
+  });
+
+  // Température 7 jours (simulée)
+  const labels = [], temps = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate()-i);
+    labels.push(d.toLocaleDateString('fr',{weekday:'short',day:'numeric'}));
+    temps.push((20 + Math.sin(i*0.8)*3 + Math.random()*1.5).toFixed(1));
+  }
+  new Chart(document.getElementById('chart-temp'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{ label: '°C', data: temps, borderColor:'#f78166',
+        backgroundColor:'rgba(247,129,102,.1)', fill:true, tension:.4,
+        pointBackgroundColor:'#f78166', pointRadius:3 }]
+    },
+    options: { ...defaults, scales: { x:{ticks:{color:'#8b949e',font:{size:10}}}, y:{ticks:{color:'#8b949e'},grid:{color:'rgba(48,54,61,.5)'}} } }
+  });
+}
+
+// ═══════════════════ TABLE ═══════════════════
+function initTable() {
+  renderTable(BATIMENTS);
+}
+
+function renderTable(data) {
+  const tbody = document.getElementById('table-body');
+  const q = id => QUARTIERS.find(x => x.id===id)?.nom || '—';
+  tbody.innerHTML = data.map(b => `
+    <tr>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${b.nom}">${b.nom}</td>
+      <td><span class="badge" style="background:${COLORS[b.usage]}22;color:${COLORS[b.usage]}">${b.usage}</span></td>
+      <td style="color:var(--text2)">${q(b.qid)}</td>
+      <td style="text-align:center">${b.niv}</td>
+      <td style="color:var(--text2)">${b.mur} / ${b.toit}</td>
+      <td><span class="badge badge-${b.etat}">${b.etat}</span></td>
+      <td style="text-align:center">${b.elec?'<span style="color:var(--warn)">⚡</span>':'<span style="color:var(--border)">—</span>'}</td>
+      <td style="text-align:center">${b.eau?'<span style="color:var(--accent2)">💧</span>':'<span style="color:var(--border)">—</span>'}</td>
+      <td style="color:var(--text2)">${b.annee||'—'}</td>
+    </tr>`).join('');
+  document.getElementById('table-count').textContent = `${data.length} bâtiment${data.length>1?'s':''}`;
+}
+
+function filterTable(val) {
+  const v = val.toLowerCase();
+  const q = id => QUARTIERS.find(x => x.id===id)?.nom?.toLowerCase() || '';
+  renderTable(BATIMENTS.filter(b =>
+    (b.nom||'').toLowerCase().includes(v) ||
+    b.usage.includes(v) || q(b.qid).includes(v) ||
+    String(b.annee||'').includes(v)
+  ));
+}
+
+// ═══════════════════ VIEW SWITCHING ═══════════════════
+function switchView(v) {
+  document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('view-'+v).classList.add('active');
+  document.getElementById('btn-'+v).classList.add('active');
+  if (v === 'map') { setTimeout(() => map.invalidateSize(), 50); }
+  if (v === '3d')  { setTimeout(init3D, 50); }
+  if (v === 'charts') { setTimeout(initCharts, 50); }
+  if (v === 'table')  { initTable(); }
+}
+
+// ═══════════════════ UPDATE KPIs ═══════════════════
+function updateKPIs() {
+  const total = BATIMENTS.length;
+  const withElec = BATIMENTS.filter(b=>b.elec).length;
+  const withEau  = BATIMENTS.filter(b=>b.eau).length;
+  document.getElementById('kpi-bat').textContent = total;
+  document.getElementById('kpi-pop').textContent = '18 500';
+  document.getElementById('kpi-elec').textContent = Math.round(withElec/total*100)+'%';
+  document.getElementById('kpi-eau').textContent  = Math.round(withEau/total*100)+'%';
+}
+
+// ═══════════════════ SIMULATE LIVE SENSORS ═══════════════════
+function simulateSensors() {
+  const items = document.querySelectorAll('.sensor-val');
+  const vals = [
+    () => (40 + Math.random()*6).toFixed(0) + ' AQI',
+    () => (21 + Math.random()*3).toFixed(1) + ' °C',
+    () => (65 + Math.random()*8).toFixed(0) + ' %',
+    () => (140 + Math.random()*12).toFixed(0) + ' m³/h',
+    () => (370 + Math.random()*25).toFixed(0) + ' kWh',
+    () => (20 + Math.random()*10).toFixed(0) + ' véh/h',
+    () => Math.random() > .8 ? (Math.random()*2).toFixed(1)+' mm/h' : '0 mm/h',
+  ];
+  items.forEach((el,i) => { if(vals[i]) el.textContent = vals[i](); });
+}
+
+// ═══════════════════ INIT ═══════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  updateKPIs();
+  initMap();
+  setInterval(simulateSensors, 4000);
+});
+</script>
+</body>
+</html>
